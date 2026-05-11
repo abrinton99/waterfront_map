@@ -158,6 +158,10 @@
 
     // ── MAP INIT ─────────────────────────────────────────────────────────────
     const map = L.map("map", {
+      // Provisional center/zoom — required by leaflet-rotate before fitBounds.
+      // Overridden immediately when the polygon (or photo bounds) are loaded.
+      center: [0, 0],
+      zoom: 2,
       rotate: true,                   // Leaflet.Rotate plugin
       bearing: BEARING,
       rotateControl: { closeOnZeroBearing: false },
