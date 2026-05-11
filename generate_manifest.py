@@ -106,12 +106,13 @@ def load_descriptions(folder):
     return descriptions
 
 
-def build_urls(filename):
+def build_urls(filename, thumb_subdir):
     """Return (thumbnail_url, full_url) for a given filename."""
     p = Path(filename)
     stem = p.stem
     ext = p.suffix
-    thumbnail_url = f"{BASE_URL}{stem}_thumb{ext}"
+    subdir = f"{thumb_subdir}/" if thumb_subdir else ""
+    thumbnail_url = f"{BASE_URL}{subdir}{stem}_thumb{ext}"
     full_url = f"{BASE_URL}{filename}"
     return thumbnail_url, full_url
 
@@ -208,7 +209,7 @@ def main():
         lat, lng = gps
         filename = path.name
         description = descriptions.get(filename, "")
-        thumbnail_url, full_url = build_urls(filename)
+        thumbnail_url, full_url = build_urls(filename, args.thumbs_dir)
 
         manifest.append(
             {
