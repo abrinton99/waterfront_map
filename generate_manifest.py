@@ -25,7 +25,7 @@ from pathlib import Path
 # Set this to the public base URL where your photos are hosted.
 # Thumbnails are expected at <BASE_URL><stem>_thumb<ext>
 # Full images are expected at <BASE_URL><filename>
-BASE_URL = "https://abrinton99.github.io/waterfront_map/photos/"
+BASE_URL = "https://abrinton99.github.io/waterfront_map/images/"
 # ────────────────────────────────────────────────────────────────────────────
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".tiff"}
