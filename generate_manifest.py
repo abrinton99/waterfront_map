@@ -2,7 +2,8 @@
 """
 generate_manifest.py
 
-Scans a folder of photos, extracts EXIF GPS coordinates, and outputs photos.json.
+Scans a folder of photos, extracts EXIF GPS coordinates, generates thumbnails,
+and outputs photos.json.
 
 Usage:
     python generate_manifest.py /path/to/photos
@@ -10,7 +11,7 @@ Usage:
 Expects an optional descriptions.csv in the scanned folder with columns:
     filename, description
 
-Outputs photos.json in the current working directory.
+Outputs photos.json and a thumbnails/ subfolder in the current working directory.
 """
 
 import argparse
@@ -26,12 +27,15 @@ from pathlib import Path
 # Thumbnails are expected at <BASE_URL><stem>_thumb<ext>
 # Full images are expected at <BASE_URL><filename>
 BASE_URL = "https://abrinton99.github.io/waterfront_map/images/"
+
+# Maximum pixel dimension (width or height) for generated thumbnails
+THUMB_MAX_PX = 600
 # ────────────────────────────────────────────────────────────────────────────
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".tiff"}
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageOps
     from PIL.ExifTags import TAGS, GPSTAGS
 except ImportError:
     sys.exit("Pillow is required. Install it with: pip install Pillow")
@@ -112,9 +116,44 @@ def build_urls(filename):
     return thumbnail_url, full_url
 
 
+def make_thumbnail(src_path, thumb_dir):
+    """
+    Resize src_path to fit within THUMB_MAX_PX on its longest side, preserving
+    aspect ratio and EXIF orientation. Saves to thumb_dir/<stem>_thumb<ext>.
+    Returns the output Path, or None on failure.
+    """
+    p = Path(src_path)
+    out_path = thumb_dir / f"{p.stem}_thumb{p.suffix}"
+
+    if out_path.exists():
+        return out_path  # skip if already generated
+
+    try:
+        with Image.open(src_path) as img:
+            # Honour EXIF rotation (important for phone photos)
+            img = ImageOps.exif_transpose(img)
+
+            # Convert palette/RGBA modes so JPEG save doesn't fail
+            if img.mode in ("P", "RGBA"):
+                img = img.convert("RGB")
+
+            img.thumbnail((THUMB_MAX_PX, THUMB_MAX_PX), Image.LANCZOS)
+
+            save_kwargs = {}
+            if p.suffix.lower() in (".jpg", ".jpeg"):
+                save_kwargs = {"quality": 82, "optimize": True}
+
+            img.save(out_path, **save_kwargs)
+    except Exception as exc:
+        warnings.warn(f"Could not create thumbnail for {src_path}: {exc}")
+        return None
+
+    return out_path
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate photos.json manifest from a folder of geotagged photos."
+        description="Generate photos.json manifest and thumbnails from a folder of geotagged photos."
     )
     parser.add_argument("folder", help="Path to the folder containing photos")
     parser.add_argument(
@@ -123,11 +162,19 @@ def main():
         default="photos.json",
         help="Output file path (default: photos.json in current directory)",
     )
+    parser.add_argument(
+        "--thumbs-dir",
+        default="thumbnails",
+        help="Directory to write thumbnails into (default: thumbnails/)",
+    )
     args = parser.parse_args()
 
     folder = Path(args.folder).expanduser().resolve()
     if not folder.is_dir():
         sys.exit(f"Error: '{folder}' is not a directory.")
+
+    thumb_dir = Path(args.thumbs_dir)
+    thumb_dir.mkdir(parents=True, exist_ok=True)
 
     descriptions = load_descriptions(folder)
 
@@ -141,11 +188,20 @@ def main():
             continue
         if path.name.lower() == "descriptions.csv":
             continue
+        # Skip files that are already thumbnails from a previous run
+        if path.stem.endswith("_thumb"):
+            continue
 
         total += 1
         gps = extract_gps(path)
         if gps is None:
             print(f"  [skip] {path.name} — no GPS data")
+            skipped += 1
+            continue
+
+        thumb = make_thumbnail(path, thumb_dir)
+        if thumb is None:
+            print(f"  [skip] {path.name} — thumbnail generation failed")
             skipped += 1
             continue
 
@@ -165,12 +221,15 @@ def main():
             }
         )
         included += 1
+        print(f"  [ok]   {path.name}")
 
     output_path = Path(args.output)
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"\nDone. Output written to: {output_path.resolve()}")
+    print(f"\nDone.")
+    print(f"  Manifest  : {output_path.resolve()}")
+    print(f"  Thumbnails: {thumb_dir.resolve()}")
     print(f"  Total scanned : {total}")
     print(f"  Included      : {included}")
     print(f"  Skipped       : {skipped}")
