@@ -174,7 +174,7 @@ def main():
     if not folder.is_dir():
         sys.exit(f"Error: '{folder}' is not a directory.")
 
-    thumb_dir = Path(args.thumbs_dir)
+    thumb_dir = folder / args.thumbs_dir
     thumb_dir.mkdir(parents=True, exist_ok=True)
 
     descriptions = load_descriptions(folder)
