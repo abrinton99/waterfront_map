@@ -56,11 +56,4 @@ Thumbs.db
 *.swo
 *~
 
-# Project-specific: generated output and local photo data
-photos.json
-photos/
-*.jpg
-*.jpeg
-*.png
-*.heic
-*.tiff
+
