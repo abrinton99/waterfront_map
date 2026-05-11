@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo Map</title>
+
+  <!-- Leaflet 1.9.4 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet.GestureHandling — prevents map from hijacking page scroll on touch -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-gesture-handling/dist/leaflet-gesture-handling.min.css" />
+  <script src="https://unpkg.com/leaflet-gesture-handling/dist/leaflet-gesture-handling.min.js"></script>
+
+  <!-- Leaflet.markercluster — groups nearby pins when zoomed out -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <style>
+    /* ── Reset & layout ─────────────────────────────────────────────────── */
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    /* Map fills the full viewport; the iframe parent controls external sizing */
+    #map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ── Error overlay ──────────────────────────────────────────────────── */
+    #error-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.92);
+      align-items: center;
+      justify-content: center;
+    }
+    #error-overlay.visible { display: flex; }
+    #error-overlay p {
+      font-size: 16px;
+      color: #374151;
+      padding: 24px;
+      text-align: center;
+    }
+
+    /* ── Custom pin marker ──────────────────────────────────────────────── */
+    .photo-pin {
+      width: 36px;
+      height: 36px;
+      background: #2563eb;
+      border: 3px solid #fff;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    }
+
+    /* ── Popup content ──────────────────────────────────────────────────── */
+    .popup-img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    /* Grey placeholder shown when image fails to load */
+    .popup-img-placeholder {
+      display: block;
+      width: 100%;
+      height: 120px;
+      background: #d1d5db;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .popup-description {
+      font-size: 14px;
+      color: #1f2937;
+      line-height: 1.4;
+      margin: 0 0 8px;
+    }
+
+    .popup-link {
+      font-size: 13px;
+      color: #2563eb;
+      text-decoration: none;
+    }
+    .popup-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="error-overlay" role="alert">
+    <p>Could not load photo data.</p>
+  </div>
+
+  <script>
+    // ── POLYGON ──────────────────────────────────────────────────────────────
+    // Replace the coordinates below with your own GeoJSON polygon.
+    // The easiest way: go to https://geojson.io, draw your area, then copy the
+    // Feature or FeatureCollection object and paste it here.
+    //
+    // The polygon determines the initial map view (fitBounds).
+    // ────────────────────────────────────────────────────────────────────────
+    const AREA_GEOJSON = {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          // ← Replace these placeholder coordinates with your own
+          [-122.430, 37.770],
+          [-122.390, 37.770],
+          [-122.390, 37.800],
+          [-122.430, 37.800],
+          [-122.430, 37.770]
+        ]]
+      },
+      "properties": {}
+    };
+
+    // ── MAP INIT ─────────────────────────────────────────────────────────────
+    const map = L.map("map", {
+      gestureHandling: true,          // Leaflet.GestureHandling plugin
+      gestureHandlingOptions: {
+        text: {
+          touch: "Use two fingers to move the map",
+          scroll: "Use Ctrl + scroll to zoom the map",
+          scrollMac: "Use ⌘ + scroll to zoom the map"
+        }
+      }
+    });
+
+    // OpenStreetMap tile layer
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors",
+      maxZoom: 19
+    }).addTo(map);
+
+    // ── POLYGON LAYER ─────────────────────────────────────────────────────────
+    let polygonBounds = null;
+    try {
+      const polygonLayer = L.geoJSON(AREA_GEOJSON, {
+        style: {
+          color: "#2563eb",
+          weight: 3,
+          fillOpacity: 0.2
+        }
+      }).addTo(map);
+      polygonBounds = polygonLayer.getBounds();
+      map.fitBounds(polygonBounds);
+    } catch (err) {
+      console.warn("GeoJSON polygon is missing or invalid:", err);
+      // Fall back to fitting on photo coords after load
+    }
+
+    // ── MARKER CLUSTER ───────────────────────────────────────────────────────
+    // maxClusterRadius: pins within 50px of each other group together
+    const clusterGroup = L.markerClusterGroup({ maxClusterRadius: 50 });
+    map.addLayer(clusterGroup);
+
+    // ── CUSTOM PIN ICON FACTORY ───────────────────────────────────────────────
+    // Visual: 36×36px teardrop. Hit area padded to 44×44px per WCAG/Apple HIG.
+    function makePinIcon(description) {
+      return L.divIcon({
+        className: "",           // suppress default Leaflet icon wrapper styles
+        html: `<div class="photo-pin" title="${escapeAttr(description)}" aria-label="${escapeAttr(description)}"></div>`,
+        iconSize: [44, 44],      // 44×44 tap target
+        iconAnchor: [22, 40],    // anchor at visual bottom-centre of the teardrop
+        popupAnchor: [0, -40]
+      });
+    }
+
+    // ── POPUP HTML BUILDER ────────────────────────────────────────────────────
+    function buildPopupHTML(photo) {
+      const desc = escapeHTML(photo.description);
+      const alt  = escapeAttr(photo.description);
+      return `
+        <img
+          class="popup-img"
+          src="${escapeAttr(photo.thumbnail_url)}"
+          alt="${alt}"
+          onerror="this.outerHTML='<div class=\\'popup-img-placeholder\\'></div>'"
+        />
+        <p class="popup-description">${desc}</p>
+        <a class="popup-link" href="${escapeAttr(photo.full_url)}" target="_blank" rel="noopener">
+          View full size
+        </a>
+      `;
+    }
+
+    // ── LOAD PHOTOS ───────────────────────────────────────────────────────────
+    // photos.json must live in the same directory as index.html
+    fetch("photos.json")
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(photos => {
+        if (!Array.isArray(photos) || photos.length === 0) return;
+
+        photos.forEach(photo => {
+          const marker = L.marker([photo.lat, photo.lng], {
+            icon: makePinIcon(photo.description)
+          });
+
+          marker.bindPopup(buildPopupHTML(photo), {
+            maxWidth: 300,
+            minWidth: 200
+          });
+
+          clusterGroup.addLayer(marker);
+        });
+
+        // If polygon bounds weren't available, fit to photo coords instead
+        if (!polygonBounds) {
+          map.fitBounds(clusterGroup.getBounds().pad(0.1));
+        }
+      })
+      .catch(err => {
+        console.error("Failed to load photos.json:", err);
+        document.getElementById("error-overlay").classList.add("visible");
+      });
+
+    // ── iOS SAFARI / IFRAME FIX ───────────────────────────────────────────────
+    // Prevents tile misalignment inside iframes on iOS Safari.
+    setTimeout(() => map.invalidateSize(), 200);
+    window.addEventListener("resize", () => map.invalidateSize());
+    window.addEventListener("orientationchange", () => map.invalidateSize());
+
+    // ── UTILITIES ─────────────────────────────────────────────────────────────
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function escapeAttr(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;");
+    }
+  </script>
+</body>
+</html>
