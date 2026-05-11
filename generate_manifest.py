@@ -91,12 +91,16 @@ def extract_gps(image_path):
 
 
 def load_descriptions(folder):
-    """Load filename→description mapping from descriptions.csv if present."""
+    """Load filename→description mapping from descriptions.csv.
+    Checks the photos folder first, then falls back to the current working directory."""
     csv_path = folder / "descriptions.csv"
+    if not csv_path.exists():
+        csv_path = Path.cwd() / "descriptions.csv"
     descriptions = {}
     if not csv_path.exists():
         return descriptions
-    with csv_path.open(newline="", encoding="utf-8") as f:
+    print(f"  Loading descriptions from: {csv_path}")
+    with csv_path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             filename = row.get("filename", "").strip()
