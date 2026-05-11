@@ -18,6 +18,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
+  <!-- Leaflet.Rotate — enables map rotation / custom bearing -->
+  <script src="https://unpkg.com/leaflet-rotate@latest/dist/leaflet-rotate-src.js"></script>
+
   <style>
     /* ── Reset & layout ─────────────────────────────────────────────────── */
     * { box-sizing: border-box; }
@@ -104,6 +107,13 @@
   </div>
 
   <script>
+    // ── BEARING ──────────────────────────────────────────────────────────────
+    // Default map rotation in degrees, clockwise from north.
+    // 0 = north up, 90 = east up, 180 = south up, 270 = west up.
+    // Adjust until the map aligns with your waterfront orientation.
+    const BEARING = 30;
+    // ────────────────────────────────────────────────────────────────────────
+
     // ── POLYGON ──────────────────────────────────────────────────────────────
     // Replace the coordinates below with your own GeoJSON polygon.
     // The easiest way: go to https://geojson.io, draw your area, then copy the
@@ -148,6 +158,9 @@
 
     // ── MAP INIT ─────────────────────────────────────────────────────────────
     const map = L.map("map", {
+      rotate: true,                   // Leaflet.Rotate plugin
+      bearing: BEARING,
+      rotateControl: { closeOnZeroBearing: false },
       gestureHandling: true,          // Leaflet.GestureHandling plugin
       gestureHandlingOptions: {
         text: {
