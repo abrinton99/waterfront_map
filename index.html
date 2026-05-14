@@ -114,92 +114,18 @@
     const BEARING = -47;
     // ────────────────────────────────────────────────────────────────────────
 
-    // ── POLYGON ──────────────────────────────────────────────────────────────
-    // Replace the coordinates below with your own GeoJSON polygon.
-    // The easiest way: go to https://geojson.io, draw your area, then copy the
-    // Feature or FeatureCollection object and paste it here.
-    //
-    // The polygon determines the initial map view (fitBounds).
+    // ── POLYGON / ZONING ─────────────────────────────────────────────────────
+    // Polygons are loaded at runtime from zoning_W_I.geojson — produced by
+    // get_zoning.py from the City of Sausalito zoning layer. Each feature has
+    // a `Zoning` property ("W" = Waterfront, "I" = Industrial); styling below
+    // colors them per code. The combined extent determines fitBounds.
     // ────────────────────────────────────────────────────────────────────────
-    const AREA_GEOJSON = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "properties": {
-            "fill": "rgba(30, 30, 83, 1)",
-            "fill-opacity": 0.3
-          },
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [-122.50439026801315, 37.871569459787096],
-                [-122.50388079392435, 37.87083942824026],
-                [-122.50299457761626, 37.86904221929028],
-                [-122.5023375551809,  37.86822200197892],
-                [-122.5008657,        37.8668938],
-                [-122.4995401,        37.8678534],
-                [-122.4985891,        37.8670283],
-                [-122.499626,         37.8662807],
-                [-122.5005185,        37.86713],
-                [-122.5008585,        37.8668867],
-                [-122.4999944,        37.8660508],
-                [-122.49752448385206, 37.86371064356432],
-                [-122.49643963285408, 37.86303512227447],
-                [-122.49445328595618, 37.861997702523325],
-                [-122.49364346760552, 37.861889134495485],
-                [-122.49202383090466, 37.86186500824566],
-                [-122.490723,         37.861692],
-                [-122.48948741871206, 37.86124978620184],
-                [-122.4892426,        37.861486],
-                [-122.4905616,        37.8621108],
-                [-122.4899168,        37.862967],
-                [-122.4902392,        37.8634298],
-                [-122.4905323,        37.8642166],
-                [-122.4916608,        37.8639389],
-                [-122.4914263,        37.8634067],
-                [-122.4933755,        37.8632216],
-                [-122.49446,          37.8624348],
-                [-122.4969808,        37.8644133],
-                [-122.4958083,        37.865362],
-                [-122.4991424,        37.8680068],
-                [-122.4980151,        37.8689089],
-                [-122.5013114,        37.8711703],
-                [-122.5021627,        37.871512],
-                [-122.50311888101882, 37.87121731204927],
-                [-122.50388840472611, 37.8719039985787],
-                [-122.50439026801315, 37.871569459787096]
-              ]
-            ]
-          },
-          "id": 0
-        },
-        {
-          "type": "Feature",
-          "properties": {
-            "fill": "#1e1e53",
-            "fill-opacity": 0.3
-          },
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [-122.4794621, 37.8572334],
-                [-122.4848326, 37.8601489],
-                [-122.4839563, 37.8611335],
-                [-122.4862859, 37.8623587],
-                [-122.4854314, 37.8633943],
-                [-122.4798575, 37.8603927],
-                [-122.4795824, 37.8581636],
-                [-122.478974,  37.8578047],
-                [-122.4794621, 37.8572334]
-              ]
-            ]
-          }
-        }
-      ]
+    const ZONING_FILE = "zoning_W_I.geojson";
+    const ZONING_STYLE = {
+      W: { color: "#0ea5e9", weight: 2, fillColor: "#0ea5e9", fillOpacity: 0.25 },
+      I: { color: "#7c3aed", weight: 2, fillColor: "#7c3aed", fillOpacity: 0.25 }
     };
+    const ZONING_DEFAULT_STYLE = { color: "#6b7280", weight: 2, fillOpacity: 0.2 };
 
     // ── MAP INIT ─────────────────────────────────────────────────────────────
     const map = L.map("map", {
@@ -228,20 +154,25 @@
 
     // ── POLYGON LAYER ─────────────────────────────────────────────────────────
     let polygonBounds = null;
-    try {
-      const polygonLayer = L.geoJSON(AREA_GEOJSON, {
-        style: {
-          color: "#2563eb",
-          weight: 3,
-          fillOpacity: 0.2
-        }
-      }).addTo(map);
-      polygonBounds = polygonLayer.getBounds();
-      map.fitBounds(polygonBounds);
-    } catch (err) {
-      console.warn("GeoJSON polygon is missing or invalid:", err);
-      // Fall back to fitting on photo coords after load
-    }
+    const polygonReady = fetch(ZONING_FILE)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(geojson => {
+        const polygonLayer = L.geoJSON(geojson, {
+          style: feature => {
+            const z = feature.properties && feature.properties.Zoning;
+            return ZONING_STYLE[z] || ZONING_DEFAULT_STYLE;
+          }
+        }).addTo(map);
+        polygonBounds = polygonLayer.getBounds();
+        map.fitBounds(polygonBounds);
+      })
+      .catch(err => {
+        console.warn(`Could not load ${ZONING_FILE}:`, err);
+        // Fall back to fitting on photo coords after load
+      });
 
     // ── MARKER CLUSTER ───────────────────────────────────────────────────────
     // maxClusterRadius: pins within 50px of each other group together
@@ -302,9 +233,11 @@
         });
 
         // If polygon bounds weren't available, fit to photo coords instead
-        if (!polygonBounds) {
-          map.fitBounds(clusterGroup.getBounds().pad(0.1));
-        }
+        polygonReady.finally(() => {
+          if (!polygonBounds) {
+            map.fitBounds(clusterGroup.getBounds().pad(0.1));
+          }
+        });
       })
       .catch(err => {
         console.error("Failed to load photos.json:", err);
