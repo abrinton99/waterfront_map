@@ -128,11 +128,12 @@
     const ZONING_DEFAULT_STYLE = { color: "#6b7280", weight: 2, fillOpacity: 0.2 };
 
     // ── MAP INIT ─────────────────────────────────────────────────────────────
+    const INITIAL_ZOOM = 15;
     const map = L.map("map", {
-      // Provisional center/zoom — required by leaflet-rotate before fitBounds.
-      // Overridden immediately when the polygon (or photo bounds) are loaded.
+      // Provisional center — overridden once zoning (or photo) data loads.
+      // Zoom is held fixed at INITIAL_ZOOM; only the center is recomputed.
       center: [0, 0],
-      zoom: 2,
+      zoom: INITIAL_ZOOM,
       rotate: true,                   // Leaflet.Rotate plugin
       bearing: BEARING,
       rotateControl: { closeOnZeroBearing: false },
@@ -167,7 +168,7 @@
           }
         }).addTo(map);
         polygonBounds = polygonLayer.getBounds();
-        map.fitBounds(polygonBounds);
+        map.setView(polygonBounds.getCenter(), INITIAL_ZOOM);
       })
       .catch(err => {
         console.warn(`Could not load ${ZONING_FILE}:`, err);
@@ -232,10 +233,10 @@
           clusterGroup.addLayer(marker);
         });
 
-        // If polygon bounds weren't available, fit to photo coords instead
+        // If polygon bounds weren't available, center on photo coords instead
         polygonReady.finally(() => {
           if (!polygonBounds) {
-            map.fitBounds(clusterGroup.getBounds().pad(0.1));
+            map.setView(clusterGroup.getBounds().getCenter(), INITIAL_ZOOM);
           }
         });
       })
