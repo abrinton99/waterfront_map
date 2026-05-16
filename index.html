@@ -98,6 +98,29 @@
       text-decoration: none;
     }
     .popup-link:hover { text-decoration: underline; }
+
+    /* ── Legend control ─────────────────────────────────────────────────── */
+    .map-legend {
+      font-size: 14px;
+      color: #1f2937;
+      padding: 10px 12px;
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      line-height: 1.4;
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .legend-row + .legend-row { margin-top: 6px; }
+    .legend-swatch {
+      width: 22px;
+      height: 14px;
+      flex: none;
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
@@ -174,6 +197,34 @@
         console.warn(`Could not load ${ZONING_FILE}:`, err);
         // Fall back to fitting on photo coords after load
       });
+
+    // ── LEGEND CONTROL ───────────────────────────────────────────────────────
+    // Built from ZONING_STYLE so swatch color, border weight, and fill opacity
+    // stay in sync with the polygons. Each swatch mirrors a polygon: fill at
+    // fillOpacity, stroke at full opacity.
+    const ZONING_LABELS = { W: "Waterfront Zone", I: "Industrial Zone" };
+
+    function hexToRgba(hex, alpha) {
+      const n = parseInt(hex.slice(1), 16);
+      return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+    }
+
+    const legend = L.control({ position: "bottomleft" });
+    legend.onAdd = function () {
+      const div = L.DomUtil.create("div", "map-legend");
+      div.innerHTML = Object.keys(ZONING_LABELS).map(code => {
+        const s = ZONING_STYLE[code];
+        return `
+          <div class="legend-row">
+            <span class="legend-swatch" style="
+              background:${hexToRgba(s.fillColor, s.fillOpacity)};
+              border:${s.weight}px solid ${s.color};"></span>
+            <span>${ZONING_LABELS[code]}</span>
+          </div>`;
+      }).join("");
+      return div;
+    };
+    legend.addTo(map);
 
     // ── MARKER CLUSTER ───────────────────────────────────────────────────────
     // maxClusterRadius: pins within 50px of each other group together
