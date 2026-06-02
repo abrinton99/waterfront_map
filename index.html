@@ -150,6 +150,15 @@
     };
     const ZONING_DEFAULT_STYLE = { color: "#6b7280", weight: 2, fillOpacity: 0.2 };
 
+    // ── MEASURE J HOUSING SITES ──────────────────────────────────────────────
+    // Property outlines loaded from measure_j.geojson — produced by
+    // get_properties.py from the Marin County parcels layer, keyed on the APNs
+    // in measure_J_sites.txt. Drawn in orange to stand apart from the zoning.
+    // ────────────────────────────────────────────────────────────────────────
+    const MEASURE_J_FILE = "measure_j.geojson";
+    const MEASURE_J_STYLE = { color: "#f97316", weight: 2, fillColor: "#f97316", fillOpacity: 0.25 };
+    const MEASURE_J_LABEL = "Measure J Housing Sites";
+
     // ── MAP INIT ─────────────────────────────────────────────────────────────
     const INITIAL_ZOOM = 15;
     const map = L.map("map", {
@@ -198,6 +207,20 @@
         // Fall back to fitting on photo coords after load
       });
 
+    // ── MEASURE J LAYER ───────────────────────────────────────────────────────
+    // Drawn on top of the zoning polygons; doesn't drive map bounds.
+    fetch(MEASURE_J_FILE)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(geojson => {
+        L.geoJSON(geojson, { style: MEASURE_J_STYLE }).addTo(map);
+      })
+      .catch(err => {
+        console.warn(`Could not load ${MEASURE_J_FILE}:`, err);
+      });
+
     // ── LEGEND CONTROL ───────────────────────────────────────────────────────
     // Built from ZONING_STYLE so swatch color, border weight, and fill opacity
     // stay in sync with the polygons. Each swatch mirrors a polygon: fill at
@@ -212,16 +235,19 @@
     const legend = L.control({ position: "bottomleft" });
     legend.onAdd = function () {
       const div = L.DomUtil.create("div", "map-legend");
-      div.innerHTML = Object.keys(ZONING_LABELS).map(code => {
-        const s = ZONING_STYLE[code];
-        return `
+      const rows = Object.keys(ZONING_LABELS).map(code => ({
+        style: ZONING_STYLE[code],
+        label: ZONING_LABELS[code]
+      }));
+      rows.push({ style: MEASURE_J_STYLE, label: MEASURE_J_LABEL });
+
+      div.innerHTML = rows.map(({ style: s, label }) => `
           <div class="legend-row">
             <span class="legend-swatch" style="
               background:${hexToRgba(s.fillColor, s.fillOpacity)};
               border:${s.weight}px solid ${s.color};"></span>
-            <span>${ZONING_LABELS[code]}</span>
-          </div>`;
-      }).join("");
+            <span>${label}</span>
+          </div>`).join("");
       return div;
     };
     legend.addTo(map);
