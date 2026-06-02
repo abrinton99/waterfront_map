@@ -159,6 +159,14 @@
     const MEASURE_J_STYLE = { color: "#f97316", weight: 2, fillColor: "#f97316", fillOpacity: 0.25 };
     const MEASURE_J_LABEL = "Measure J Housing Sites";
 
+    // For three sites (303, 402) the overlay covers only part of the assessor
+    // parcel. measure_j_overlays.geojson holds APPROXIMATE sub-area polygons
+    // (hand-digitized from the city's overlay map); APNs present there replace
+    // the full parcel and render dashed to signal they're estimates.
+    const MEASURE_J_OVERLAYS_FILE = "measure_j_overlays.geojson";
+    const MEASURE_J_APPROX_STYLE = { color: "#f97316", weight: 2, dashArray: "6 4", fillColor: "#f97316", fillOpacity: 0.25 };
+    const MEASURE_J_APPROX_LABEL = "Overlay area (approx., partial parcel)";
+
     // ── MAP INIT ─────────────────────────────────────────────────────────────
     const INITIAL_ZOOM = 15;
     const map = L.map("map", {
@@ -208,17 +216,35 @@
       });
 
     // ── MEASURE J LAYER ───────────────────────────────────────────────────────
-    // Drawn on top of the zoning polygons; doesn't drive map bounds.
-    fetch(MEASURE_J_FILE)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then(geojson => {
-        L.geoJSON(geojson, { style: MEASURE_J_STYLE }).addTo(map);
+    // Drawn on top of the zoning polygons; doesn't drive map bounds. Full
+    // parcels load from MEASURE_J_FILE; the approximate partial-parcel overlays
+    // load from MEASURE_J_OVERLAYS_FILE and replace the full parcel for any APN
+    // they cover (so we don't draw both the parcel and its sub-area).
+    const fetchJson = file => fetch(file).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    });
+
+    fetchJson(MEASURE_J_OVERLAYS_FILE)
+      .catch(() => ({ type: "FeatureCollection", features: [] }))
+      .then(overlays => {
+        const overriddenApns = new Set(
+          overlays.features.map(f => f.properties && f.properties.Parcel)
+        );
+
+        // Approximate partial overlays (dashed).
+        L.geoJSON(overlays, { style: MEASURE_J_APPROX_STYLE }).addTo(map);
+
+        // Full parcels, skipping any APN covered by an approximate overlay.
+        return fetchJson(MEASURE_J_FILE).then(geojson => {
+          L.geoJSON(geojson, {
+            filter: f => !overriddenApns.has(f.properties && f.properties.Parcel),
+            style: MEASURE_J_STYLE
+          }).addTo(map);
+        });
       })
       .catch(err => {
-        console.warn(`Could not load ${MEASURE_J_FILE}:`, err);
+        console.warn(`Could not load Measure J layers:`, err);
       });
 
     // ── LEGEND CONTROL ───────────────────────────────────────────────────────
@@ -240,14 +266,20 @@
         label: ZONING_LABELS[code]
       }));
       rows.push({ style: MEASURE_J_STYLE, label: MEASURE_J_LABEL });
+      rows.push({ style: MEASURE_J_APPROX_STYLE, label: MEASURE_J_APPROX_LABEL });
 
-      div.innerHTML = rows.map(({ style: s, label }) => `
+      div.innerHTML = rows.map(({ style: s, label }) => {
+        const border = s.dashArray
+          ? `${s.weight}px dashed ${s.color}`
+          : `${s.weight}px solid ${s.color}`;
+        return `
           <div class="legend-row">
             <span class="legend-swatch" style="
               background:${hexToRgba(s.fillColor, s.fillOpacity)};
-              border:${s.weight}px solid ${s.color};"></span>
+              border:${border};"></span>
             <span>${label}</span>
-          </div>`).join("");
+          </div>`;
+      }).join("");
       return div;
     };
     legend.addTo(map);
