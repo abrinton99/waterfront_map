@@ -8,17 +8,16 @@
         "Parcel": "06314015",
         "Site": "303",
         "approximate": true,
-        "note": "Approx. 3-acre overlay portion (lower/southern part of parcel, along Bridgeway) of 1 & 3 Harbor Dr (full parcel is 6.25 ac)"
+        "note": "Approx. 3-acre overlay portion, rectangular band along the Bridgeway frontage of 1 & 3 Harbor Dr (full parcel is 6.25 ac)"
       },
       "geometry": {
         "type": "Polygon",
         "coordinates": [[
-          [-122.501868, 37.868030],
           [-122.500787, 37.867005],
-          [-122.499670, 37.867857],
-          [-122.499639, 37.867879],
-          [-122.499447, 37.868030],
-          [-122.501868, 37.868030]
+          [-122.501871, 37.868033],
+          [-122.501235, 37.868520],
+          [-122.500078, 37.867549],
+          [-122.500787, 37.867005]
         ]]
       }
     },
@@ -28,16 +27,15 @@
         "Parcel": "06315201",
         "Site": "402",
         "approximate": true,
-        "note": "Approx. 1-acre overlay portion (lower/southern paved/parking area, along Bridgeway) of 2680 Bridgeway Blvd (full parcel is 2.26 ac)"
+        "note": "Approx. 1-acre overlay portion (paved/parking area), rectangular band along the Bridgeway frontage of 2680 Bridgeway Blvd (full parcel is 2.26 ac)"
       },
       "geometry": {
         "type": "Polygon",
         "coordinates": [[
           [-122.502540, 37.868805],
-          [-122.502658, 37.868967],
-          [-122.502919, 37.869383],
-          [-122.502952, 37.869450],
-          [-122.501703, 37.869450],
+          [-122.503132, 37.869814],
+          [-122.502846, 37.869924],
+          [-122.502187, 37.869078],
           [-122.502540, 37.868805]
         ]]
       }
