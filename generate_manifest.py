@@ -30,6 +30,10 @@ BASE_URL = "https://abrinton99.github.io/waterfront_map/images/"
 
 # Maximum pixel dimension (width or height) for generated thumbnails
 THUMB_MAX_PX = 600
+
+# Text written into descriptions.csv for newly discovered photos, so there's a
+# row to fill in. Edit the description here, not the placeholder, on later runs.
+PLACEHOLDER_DESCRIPTION = "TODO: add description"
 # ────────────────────────────────────────────────────────────────────────────
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".tiff"}
@@ -90,12 +94,19 @@ def extract_gps(image_path):
     return lat, lng
 
 
-def load_descriptions(folder):
-    """Load filename→description mapping from descriptions.csv.
-    Checks the photos folder first, then falls back to the current working directory."""
-    csv_path = folder / "descriptions.csv"
-    if not csv_path.exists():
-        csv_path = Path.cwd() / "descriptions.csv"
+def resolve_descriptions_path(folder):
+    """Return the descriptions.csv path to read from and write placeholders to.
+    Prefers an existing file in the photos folder, then an existing one in the
+    current working directory; if neither exists, defaults to the cwd path
+    (where it will be created)."""
+    folder_csv = folder / "descriptions.csv"
+    if folder_csv.exists():
+        return folder_csv
+    return Path.cwd() / "descriptions.csv"
+
+
+def load_descriptions(csv_path):
+    """Load filename→description mapping from the given descriptions.csv path."""
     descriptions = {}
     if not csv_path.exists():
         return descriptions
@@ -108,6 +119,21 @@ def load_descriptions(folder):
             if filename:
                 descriptions[filename] = description
     return descriptions
+
+
+def append_placeholders(csv_path, filenames):
+    """Append a placeholder row to descriptions.csv for each new filename,
+    writing a header first if the file doesn't exist yet."""
+    if not filenames:
+        return
+    write_header = not csv_path.exists()
+    with csv_path.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if write_header:
+            writer.writerow(["filename", "description"])
+        for filename in filenames:
+            writer.writerow([filename, PLACEHOLDER_DESCRIPTION])
+    print(f"  Added {len(filenames)} placeholder description(s) to: {csv_path}")
 
 
 def build_urls(filename, thumb_subdir):
@@ -181,12 +207,14 @@ def main():
     thumb_dir = folder / args.thumbs_dir
     thumb_dir.mkdir(parents=True, exist_ok=True)
 
-    descriptions = load_descriptions(folder)
+    descriptions_path = resolve_descriptions_path(folder)
+    descriptions = load_descriptions(descriptions_path)
 
     total = 0
     included = 0
     skipped = 0
     manifest = []
+    new_files = []  # included photos with no descriptions.csv entry yet
 
     for path in sorted(folder.rglob("*")):
         if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
@@ -212,6 +240,8 @@ def main():
 
         lat, lng = gps
         filename = path.name
+        if filename not in descriptions:
+            new_files.append(filename)
         description = descriptions.get(filename, "")
         thumbnail_url, full_url = build_urls(filename, args.thumbs_dir)
 
@@ -232,12 +262,15 @@ def main():
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
+    append_placeholders(descriptions_path, new_files)
+
     print(f"\nDone.")
     print(f"  Manifest  : {output_path.resolve()}")
     print(f"  Thumbnails: {thumb_dir.resolve()}")
     print(f"  Total scanned : {total}")
     print(f"  Included      : {included}")
     print(f"  Skipped       : {skipped}")
+    print(f"  New (placeholder added): {len(new_files)}")
 
 
 if __name__ == "__main__":

@@ -190,13 +190,6 @@
       maxZoom: 19
     }).addTo(map);
 
-    // Dedicated pane so Measure J always draws above the zoning polygons,
-    // regardless of which fetch resolves first. Without this, a shared edge
-    // between a Measure J site and the purple I zone shows whichever layer
-    // loaded last — leaving some orange outlines covered by purple.
-    map.createPane("measureJ");
-    map.getPane("measureJ").style.zIndex = 450; // above default overlayPane (400)
-
     // ── POLYGON LAYER ─────────────────────────────────────────────────────────
     let polygonBounds = null;
     const polygonReady = fetch(ZONING_FILE)
@@ -229,24 +222,29 @@
       return res.json();
     });
 
-    fetchJson(MEASURE_J_OVERLAYS_FILE)
-      .catch(() => ({ type: "FeatureCollection", features: [] }))
-      .then(overlays => {
+    // Wait for the zoning layer (polygonReady) before adding Measure J, so the
+    // orange parcels are always added last and draw on top — otherwise a shared
+    // edge with the purple I zone shows whichever layer's fetch resolved last.
+    // Everything stays in the default overlayPane so the Leaflet.Rotate plugin
+    // applies the map bearing to it (custom panes are not rotated).
+    Promise.all([
+      fetchJson(MEASURE_J_OVERLAYS_FILE).catch(() => ({ type: "FeatureCollection", features: [] })),
+      fetchJson(MEASURE_J_FILE),
+      polygonReady
+    ])
+      .then(([overlays, geojson]) => {
         const overriddenApns = new Set(
           overlays.features.map(f => f.properties && f.properties.Parcel)
         );
 
         // Approximate partial overlays (same style as full parcels).
-        L.geoJSON(overlays, { style: MEASURE_J_STYLE, pane: "measureJ" }).addTo(map);
+        L.geoJSON(overlays, { style: MEASURE_J_STYLE }).addTo(map);
 
         // Full parcels, skipping any APN covered by an approximate overlay.
-        return fetchJson(MEASURE_J_FILE).then(geojson => {
-          L.geoJSON(geojson, {
-            filter: f => !overriddenApns.has(f.properties && f.properties.Parcel),
-            style: MEASURE_J_STYLE,
-            pane: "measureJ"
-          }).addTo(map);
-        });
+        L.geoJSON(geojson, {
+          filter: f => !overriddenApns.has(f.properties && f.properties.Parcel),
+          style: MEASURE_J_STYLE
+        }).addTo(map);
       })
       .catch(err => {
         console.warn(`Could not load Measure J layers:`, err);
