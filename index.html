@@ -190,6 +190,13 @@
       maxZoom: 19
     }).addTo(map);
 
+    // Dedicated pane so Measure J always draws above the zoning polygons,
+    // regardless of which fetch resolves first. Without this, a shared edge
+    // between a Measure J site and the purple I zone shows whichever layer
+    // loaded last — leaving some orange outlines covered by purple.
+    map.createPane("measureJ");
+    map.getPane("measureJ").style.zIndex = 450; // above default overlayPane (400)
+
     // ── POLYGON LAYER ─────────────────────────────────────────────────────────
     let polygonBounds = null;
     const polygonReady = fetch(ZONING_FILE)
@@ -230,13 +237,14 @@
         );
 
         // Approximate partial overlays (same style as full parcels).
-        L.geoJSON(overlays, { style: MEASURE_J_STYLE }).addTo(map);
+        L.geoJSON(overlays, { style: MEASURE_J_STYLE, pane: "measureJ" }).addTo(map);
 
         // Full parcels, skipping any APN covered by an approximate overlay.
         return fetchJson(MEASURE_J_FILE).then(geojson => {
           L.geoJSON(geojson, {
             filter: f => !overriddenApns.has(f.properties && f.properties.Parcel),
-            style: MEASURE_J_STYLE
+            style: MEASURE_J_STYLE,
+            pane: "measureJ"
           }).addTo(map);
         });
       })
